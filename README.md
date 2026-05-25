@@ -153,6 +153,27 @@ v7 中 `cir_gate=0`（初始权重 `0.5`），`din_gate=-3`（初始权重约 `0
 
 `v6 -> v7` 提升 `+0.0022`；将 CIR gate 回退的 v9 为 `0.8296`。这支持 DIN 与 CIR 联合是有效方向，但由于单次运行存在波动，二者的独立贡献仍应通过多 seed 消融判断。
 
+## `run.sh` 配置对照
+
+除模型结构外，最终启动配置也与 baseline 不同。下表来自两份 `run.sh` 及对应 `train.py` 的可核查差异；这些配置与结构改动共同构成最终方案，不等价于独立消融。
+
+| 配置 | Baseline | PCVRHyFormer 0.8311 | 说明 |
+| --- | ---: | ---: | --- |
+| `--user_ns_tokens` | `5` | `4` | 为新增对齐字段 token 重新分配用户侧容量 |
+| `--item_ns_tokens` | `2` | `3` | 增加商品侧 token 容量 |
+| `--num_queries` | `2` | `1` | 配合新 token 组成调整 RankMixer 输入预算 |
+| `--emb_skip_threshold` | `1000000` | `60000000` | 保留更多高基数特征 embedding |
+| `--use_aligned_pair_tokens` | 无此模块 | 开启，`4` 个 token | 引入 ID/value 对齐表示 |
+| `--aligned_pair_value_interaction` | 无此模块 | `scale_shift` | 连续值调制对应 ID embedding |
+| `--drop_aligned_pair_from_base` | 无此模块 | 开启 | 避免对齐字段在基础路径重复计入 |
+| `--num_interaction_layers` | 无此模块 | `2` | 启用核心两层门控特征交互 |
+| `--seed` | 默认 `42` | `2002` | 固定最终复现实验随机种子 |
+| 启动方式 | 单进程 `python3 -u` | 单卡 `python3 -u` / 多卡 `torchrun` | 新增 DDP 训练支持 |
+
+两版默认均保留 `d_model=64`、`emb_dim=64`、`num_hyformer_blocks=2`、`num_heads=4`、`dropout_rate=0.01`、`loss_type=bce` 与相同序列长度配置；dense learning rate 则由 baseline 的 `1e-4` 调整为 `1.5e-4`。
+
+补充说明：当前 `run.sh` 注释中出现了 `SlidingWindow RelativeTimeBias`，但代码仅在序列长度 `L <= 128` 时应用该分支，默认 `256/512` 序列长度下并未启用，因此这里不将 RTB 计作确认的涨分组件。
+
 ## 更多说明
 
 更完整的模块公式、实验边界与扩展方向见 [TECHNICAL_ANALYSIS.md](TECHNICAL_ANALYSIS.md)。
